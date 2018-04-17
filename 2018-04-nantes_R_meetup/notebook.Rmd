@@ -1,0 +1,422 @@
+---
+title: "R pour le web notbook"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Web scraping 
+
+## Liens
+
+```{r}
+library(rvest)
+library(purrr)
+library(tibble)
+
+### ThinkR
+
+url <- "https://thinkr.fr"
+
+# A fonction to get all the url from a page
+
+urls_getter <- function(url){
+  read_html(url) %>%
+    html_nodes("a") %>%
+    html_attr("href") %>%
+    keep(~ grepl("http", .x)) %>%
+    unique() %>%
+    tibble(url  = url, 
+           links = .)
+}
+
+home <- urls_getter(url)
+
+# One level down
+
+premier_niveau <- map_df(home$links, urls_getter) 
+
+## How many different links ? 
+
+library(dplyr)
+home %>%
+  distinct(links) %>%
+  summarize(n())
+
+# Visualisation with VisNetwork
+
+library(visNetwork)
+unique_link <- unique(c(home$links, home$url))
+nodes <- tibble(id = unique_link, 
+                label = unique_link) %>%
+  mutate(group = case_when(
+    grepl("thinkr", label) ~ "internal", 
+    TRUE ~ "external"
+  ))
+edges <- home %>%
+  rename(from = url, 
+         to = links)
+visNetwork(nodes, edges)
+
+# With a function
+
+get_and_draw <- function(url, base){
+  
+  home <- urls_getter(url)
+  
+  unique_link <- unique(c(home$links, home$url))
+  
+  nodes <- tibble(id = unique_link, 
+                  label = unique_link) %>%
+    mutate(group = case_when(
+      grepl(base, label) ~ "internal", 
+      TRUE ~ "external"
+    ))
+  edges <- home %>%
+    rename(from = url, 
+           to = links)
+  
+  visNetwork(nodes, edges)
+}
+
+# Let's try it
+get_and_draw("https://colinfay.me", "colinfay")
+```
+
+## Text mining 
+
+```{r}
+# Extract h1 to h3, and p
+extract_content <- function(url){
+  nodes <- c("h1", "h2", "h3", "p")
+  map_df(nodes, ~ read_html(url) %>%
+           html_nodes(.x) %>%
+           html_text() %>%
+           tibble(header  = .x, 
+                  links = .))
+}
+res <- extract_content("http://thinkr.fr")
+
+# Text mining
+library(tidytext)
+library(proustr)
+res %>%
+  unnest_tokens(word, links) %>%
+  anti_join(proust_stopwords()) %>% 
+  count(word) %>% 
+  top_n(10) %>% 
+  arrange(n)
+
+# Visualisation
+
+sample_viridis <- function(n){
+  sample(viridis::viridis(100), 1)
+}
+
+library(ggplot2)
+
+res %>%
+  unnest_tokens(word, links) %>%
+  anti_join(proust_stopwords()) %>%
+  count(word) %>%
+  top_n(10, n) %>%
+  ggplot() + 
+  aes(reorder(word, n), n) +
+  geom_col(fill = sample_viridis(1)) + 
+  coord_flip() + 
+  labs(x = "word",
+       y = "frequency") + 
+  theme_minimal()
+
+mine_and_draw <- function(url){
+  res <- extract_content(url)
+  res %>%
+    unnest_tokens(word, links) %>%
+    anti_join(proust_stopwords()) %>%
+    count(word) %>%
+    top_n(10, n) %>%
+    ggplot() + 
+    aes(reorder(word, n), n) +
+    geom_col(fill = sample(viridis::viridis(100),1)) + 
+    coord_flip() + 
+    labs(x = "word",
+         y = "frequency") + 
+    theme_minimal()
+}
+mine_and_draw("https://abcdr.thinkr.fr/")
+
+unique_links <-unique(premier_niveau$url)
+all_site <- map_df(unique_links, ~ extract_content(.x) %>%
+                     unnest_tokens(word, links) %>%
+                     anti_join(proust_stopwords()))
+
+all_site %>% 
+  count(word) %>%
+  top_n(10) %>% 
+  arrange(desc(n))
+```
+
+## SEO
+
+```{r}
+url <- "https://www.google.fr/search?q=purrr&pws=0"
+
+# Position in the SERP
+
+read_html(url) %>% 
+  html_nodes("div cite") %>% 
+  html_text
+
+library(glue)
+# With a function
+serp <- function(search){
+  glue("https://www.google.fr/search?q={URLencode(search)}&pws=0") %>%
+    read_html() %>% 
+    html_nodes("div cite") %>% 
+    html_text
+}
+serp("formation R")
+serp("R nantes")
+```
+
+# Social Media
+
+## rtweet
+
+```{r eval = FALSE}
+# Search for tweets
+library(rtweet)
+tweets <- search_tweets("#RStats",  n = 1000)
+
+tweets %>%
+  count(screen_name) %>%
+  top_n(5)
+
+# Text mining 
+
+otpr <- tweets %>%
+  unnest_tokens(output = word, input = text)
+
+otpr %>%
+  count(word) %>%
+  # Dataset of stopwords from tidytext
+  anti_join(stop_words) %>%
+  # Filter on custom stopwords 
+  filter(! word %in% c("rt","amp","https", "t.co", "rstats") ) %>%
+  top_n(10, n) %>%
+  ggplot() + 
+  aes(reorder(word, n), n) +
+  geom_col(fill = viridis::viridis(1)) + 
+  coord_flip() + 
+  labs(x = "word",
+       y = "frequency") + 
+  theme_minimal()
+
+otpr %>%
+  inner_join(get_sentiments("nrc")) %>%
+  count(sentiment) %>%
+  ggplot() + 
+  aes(reorder(sentiment, n), n, fill = sentiment) +
+  geom_col() + 
+  coord_flip() + 
+  scale_fill_viridis_d() +
+  theme_minimal() +
+  labs(x = "sentiment",
+       y = "frequency") + 
+  theme(legend.position = 'none')
+
+
+otpr %>%
+  inner_join(get_sentiments("nrc")) %>%
+  ggplot() + 
+  aes(created_at,  fill = sentiment) + 
+  geom_density() + 
+  scale_fill_viridis_d() + 
+  theme_minimal() + 
+  facet_grid(sentiment~ .) +
+  theme(legend.position = 'none')
+```
+
+## Facebook
+
+```{r}
+# Get a token at : 
+browseURL("https://developers.facebook.com/tools/explorer/145634995501895/")
+token <- '****'
+
+# Get users and compare the number of likes
+library(Rfacebook)
+getUsers(c("Rprogrammingfun", "rcomputing"), token) %>%
+  ggplot() +
+  aes(name, likes) +
+  geom_col(fill = sample_viridis(1)) + 
+  theme_minimal()
+
+# Get a full page with post and commentts
+page <- getPage("rstudioinc", token, n = 5000)
+page %>% 
+  summarize(likes = mean(likes_count), 
+            comments = mean(comments_count), 
+            share = mean(shares_count))
+
+# Quick stats
+page %>% 
+  top_n(5,likes_count) %>%
+  select(message, likes_count)
+page %>% 
+  top_n(5,comments_count) %>%
+  select(message, comments_count)
+page %>% 
+  top_n(5,shares_count) %>%
+  select(message, shares_count)
+
+# Get the post with comments
+getPost(page$id[11], token)
+
+comm <- map(page$id, ~ getPost(.x, token))
+```
+
+## API call 
+
+```{r}
+# Custom API Call 
+library(httr)
+library(jsonlite)
+
+# Create an app
+app_id <- "github"
+client_id <- "***"
+client_secret <- "***"
+github_endpoint <- oauth_endpoints("github")
+github_app <- httr::oauth_app(app_id, client_id, client_secret)
+access_token <- httr::oauth2.0_token(github_endpoint, github_app)
+
+# Search on the API
+get_page <- function(page, location){
+  Sys.sleep(3)
+  GET(url = glue("https://api.github.com/search/users?q=location%3A{location}&type=Users&per_page=100&page={page}")) %>%
+    .$content %>%
+    rawToChar() %>% 
+    fromJSON() %>% 
+    .$items
+}
+
+all_pages <- function(page_count, location){
+   map_df(.x = page_count, 
+                     .f = ~get_page(page = .x, location = location))
+}
+
+
+get_res <- function(location){
+  location <- URLencode(location)
+  res <- GET(url = glue("https://api.github.com/search/users?q=location%3A{location}&type=Users")) 
+  results <- res$content %>% rawToChar() %>% fromJSON()
+  if (results$total_count != 0) {
+    pages <- 1:ceiling(results$total_count / 100)
+    all_pages(page_count = pages, location = location)
+  }
+}
+
+nantes <- get_res("Nantes")
+
+# Get the users 
+
+get_user <- function(username){
+  Sys.sleep(0.5)
+  res <- GET(url = glue("https://api.github.com/users/{username}"), 
+                 config(token = access_token)) 
+  res <- res$content %>% rawToChar() %>% fromJSON()
+  tibble(login = res$login %||% NA, 
+         id = res$id %||% NA, 
+         avatar = res$avatar_url %||% NA, 
+         gravatar = res$gravatar_id %||% NA, 
+         url = res$url %||% NA, 
+         html_url = res$html_url %||% NA, 
+         followers_url = res$followers_url %||% NA, 
+         following_url = res$following_url %||% NA, 
+         gists_url = res$gists_url %||% NA, 
+         starred_url = res$starred_url %||% NA,
+         subscriptions_url = res$subscriptions_url %||% NA,
+         organizations_url = res$organizations_url %||% NA,
+         repos_url = res$repos_url %||% NA,
+         events_url = res$events_url %||% NA,
+         received_events_url = res$received_events_url %||% NA,
+         type = res$type %||% NA,
+         site_admin = res$site_admin %||% NA,
+         name = res$name %||% NA,
+         company = res$company %||% NA,
+         blog = res$blog %||% NA,
+         location = res$location %||% NA,
+         email = res$email %||% NA,
+         hireable = res$hireable %||% NA,
+         bio = res$bio %||% NA,
+         public_repos = res$public_repos %||% NA,
+         public_gists = res$public_gists %||% NA,
+         followers = res$followers %||% NA,
+         following = res$following %||% NA,
+         created_at = res$created_at %||% NA,
+         updated_at = res$updated_at %||% NA
+         )
+}
+
+nantes_users <- map_df(nantes$login, ~get_user(.x)) 
+```
+
+# Metrics
+
+```{r}
+# Bring Google Analytics data in R 
+library(googleAnalyticsR)
+token <- ga_auth()
+plop <- ga_account_list() %>%
+  filter(accountName %in% c("Abcd'R", "ThinkR"))
+custom_ga_call <- function(view_ids, view_names, 
+                           date_range, metrics, dimensions, max = -1){
+  map2_df(view_ids, view_names, ~ google_analytics(.x, 
+                                                   date_range = date_range, 
+                                                   metrics = metrics, 
+                                                   dimensions = dimensions, max = max) %>%
+            mutate(site = .y)) %>%
+    as_tibble()
+}
+
+a <- custom_ga_call(plop$viewId, plop$accountName,
+               date_range = c("2017-01-01", "2017-12-31"), 
+               metrics = "sessions", 
+               dimensions = "date") 
+abcdr <- a %>%
+  filter(site == "Abcd'R") 
+
+library(lubridate)
+abcdr %>%
+  mutate(week = week(date)) %>%
+  group_by(week) %>%
+  summarize(sessions = sum(sessions)) %>%
+  ggplot() + 
+  aes(week, sessions) + 
+  geom_col(fill = sample_viridis()) + 
+  theme_minimal()
+
+pages <- custom_ga_call(plop$viewId, plop$accountName,
+               date_range = c("2017-01-01", "2017-12-31"), 
+               metrics = "pageviews", 
+               dimensions = "pageTitle") 
+pages %>%
+  filter(site == "Abcd'R") %>%
+  mutate(pageTitle = stringr::str_replace_all(pageTitle, "\\| Abcd'R - astuces et scripts R", "") ) %>%
+  select(-site) %>%
+  arrange(desc(pageviews))
+
+geo <- custom_ga_call(plop$viewId, plop$accountName,
+               date_range = c("2017-01-01", "2017-12-31"), 
+               metrics = "sessions", 
+               dimensions = "country") 
+
+geo %>%
+  filter(site == "Abcd'R") %>%
+  select(-site) %>%
+  arrange(desc(sessions))
+```
+
