@@ -1,0 +1,62 @@
+/*
+	RESET & BASIC SETUP
+*/
+
+@import url(font-awesome.min.css);
+@import url("https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,300i,400i");
+
+* {
+	margin: 0; 
+	padding: 0; 
+}
+
+body { 
+	font-family: 'Source Sans Pro', Helvetica, sans-serif;
+	background: #ff69b4;
+	color: #000000; 
+	padding: 20px;
+}
+
+tr { 
+	vertical-align: top;
+}
+
+/*
+	STRUCTURE
+*/
+.post { 
+	width: 500px; 
+	border-style: solid;
+	border-color: red;
+	padding:1em;
+}
+
+
+/*
+	TYPOGRAPHY
+*/
+p { 
+  font-size: 1.2em; 
+  margin: 0 0 15px 0; 
+  
+}
+h1 { 
+  font-family: Helvetica, sans-serif; 
+  font-size: 4.0em;
+  letter-spacing: -1px; 
+  color: #ccc; 
+  
+}
+h2 { 
+  font-family: Helvetica, sans-serif; 
+  font-size: 3.0em;
+  letter-spacing: -1px; 
+  color: #ccc; }
+a { 
+  color: #0066cc; 
+  
+}
+a:hover { 
+  color: #ccc; 
+  
+}

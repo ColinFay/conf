@@ -1,0 +1,76 @@
+---
+title: "Web2Day"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Shiny
+
+Shiny est une librairie de création d'appli web: 
+
+```{r}
+library(shiny)
+library(tidyverse)
+
+ui <- fluidPage(
+  h2("Appli demo"),
+  h3("Ouais elle est cool mon appli"),
+  sliderInput("choice", "Combien t'en veux?", 1, 150, 75),
+  plotOutput("graph")
+)
+
+server <- function(input, output, session) {
+  output$graph <- renderPlot({
+    iris %>%
+      head(input$choice) %>%
+      ggplot() +
+      aes(Sepal.Length, Sepal.Width) +
+      geom_point()
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+Mais bien sûr, ça ne fait sens que si on charge la mule : 
+
+```{r}
+library(randomForest)
+library(tidyverse)
+
+educ <- read.csv2("fr-esr-enseignants-titulaires-esr-public-national.csv")
+
+set.seed(2811)
+ui <- fluidPage(
+  h2("Appli demo"),
+  h3("Ouais elle est cool mon appli"),
+  sliderInput("choice", "Combien tu veux d'arbres?", 1, 500, 10),
+  verbatimTextOutput("model"),
+  plotOutput("graph")
+)
+
+server <- function(input, output, session) {
+
+    model <- reactive({
+      withProgress(message = "Running simulation", {
+      randomForest(Sexe ~ Type.établissement + 
+                     Rentrée + Categorie.de.personnels + 
+                     Académie + Grande.discipline + Nationalité, 
+                   data = educ, ntree = input$choice)})
+    })
+    
+    output$model <- renderPrint({
+      model()
+    })
+  output$graph <- renderPlot({
+    varImpPlot(model())
+  })
+}
+
+shinyApp(ui, server)
+```
+

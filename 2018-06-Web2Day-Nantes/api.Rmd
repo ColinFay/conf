@@ -1,0 +1,12 @@
+---
+title: "Api"
+output: html_document
+---
+
+# On génère une API qui va faire tourner du R
+
+```{r}
+pr <- plumber::plumb("api.R")
+pr$run()
+```
+
