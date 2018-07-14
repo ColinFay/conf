@@ -1,0 +1,36 @@
+---
+title: "Web2Day"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Rtweet et Web2Day
+
+Collecte des données : 
+
+```{r message = FALSE}
+library(tidyverse)
+library(rtweet)
+web2day <- search_tweets("#Web2Day")
+
+```
+
+Visualisation
+
+```{r}
+DT::datatable(web2day)
+web2day %>%
+  ggplot() + 
+  aes(created_at) + 
+  geom_density()
+
+web2day %>%
+  count(screen_name, sort = TRUE) %>%
+  top_n(5)
+
+```
+
+
