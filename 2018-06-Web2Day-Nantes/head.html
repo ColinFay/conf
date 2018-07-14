@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	
+	<title> {{ title }} </title>
+	
+	<link rel="stylesheet" href="style.css">
+	
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+	<script src="jquery.mousewheel.js"></script>
+	<script>
+	$(function(){
+		$("#page-wrap").wrapInner("<table cellspacing='30'><tr>");
+		$(".post").wrap("<td></td>");
+		$("body").mousewheel(function(event, delta) {
+			this.scrollLeft -= (delta * 30);
+			event.preventDefault();
+		});   
+	});
+	</script>
+</head>
